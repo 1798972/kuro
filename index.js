@@ -55,6 +55,34 @@ function createMainWindow() {
     }
   });
 
+  // Right after login / network changes DNS may not be ready yet and the page
+  // fails to load, leaving a blank window: retry with a growing delay
+  let retryDelay = 2000;
+  kuroWindow.webContents.on("did-fail-load", (_event, code, _desc, failedUrl, isMainFrame) => {
+    // -3 = ERR_ABORTED: a navigation replaced by another one, not a failure
+    if (!isMainFrame || code === -3 || exiting) {
+      return;
+    }
+
+    setTimeout(() => {
+      if (!kuroWindow.isDestroyed()) {
+        kuroWindow.loadURL(failedUrl || url.app);
+      }
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 30_000);
+  });
+  kuroWindow.webContents.on("did-finish-load", () => {
+    retryDelay = 2000;
+  });
+
+  // To-Do registers a beforeunload handler that silently cancels app.quit():
+  // once the user has chosen to exit, let the page unload anyway
+  kuroWindow.webContents.on("will-prevent-unload", (event) => {
+    if (exiting) {
+      event.preventDefault();
+    }
+  });
+
   kuroWindow.on("page-title-updated", (error) => {
     error.preventDefault();
   });
