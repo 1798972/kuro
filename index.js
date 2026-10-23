@@ -58,12 +58,14 @@ function createMainWindow() {
   // Right after login / network changes DNS may not be ready yet and the page
   // fails to load, leaving a blank window: retry with a growing delay
   let retryDelay = 2000;
+  let loadFailed = false;
   kuroWindow.webContents.on("did-fail-load", (_event, code, _desc, failedUrl, isMainFrame) => {
     // -3 = ERR_ABORTED: a navigation replaced by another one, not a failure
     if (!isMainFrame || code === -3 || exiting) {
       return;
     }
 
+    loadFailed = true;
     setTimeout(() => {
       if (!kuroWindow.isDestroyed()) {
         kuroWindow.loadURL(failedUrl || url.app);
@@ -72,6 +74,12 @@ function createMainWindow() {
     retryDelay = Math.min(retryDelay * 2, 30_000);
   });
   kuroWindow.webContents.on("did-finish-load", () => {
+    // The error page of a failed load also "finishes": keep backing off then
+    if (loadFailed) {
+      loadFailed = false;
+      return;
+    }
+
     retryDelay = 2000;
   });
 
